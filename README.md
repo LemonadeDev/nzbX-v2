@@ -1,4 +1,4 @@
-This is a horribly put together early proof of concept of the nzbX V2 public indexing engine that is being developed as a result of the nzbX closure. It requires Python 3.3 and MongoDB installed. Python modules required include PyMongo and uh... well, that's it. It currently only checks against a single regex, which has only been tested in a single group. It might work with older versions of Python, but this is untested.
+This is a horribly put together early proof of concept of the nzbX V2 public indexing engine that is being developed as a result of the nzbX closure. It requires Python 3 and MongoDB installed. Python modules required include PyMongo and uh... well, that's it. It currently only checks against a single regex, which has only been tested in a single group.
 
 **Installation**
 
