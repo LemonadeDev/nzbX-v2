@@ -19,7 +19,7 @@ collections = dict(articles = db['articles'], groups = db['groups'], releases = 
 
 # configuration
 config = dict(headers=['From', 'Subject', 'Date', 'Newsgroups', 'Lines'])
-server = dict(host = 'HOST', username = 'USERNAME', password = 'PASSWORD')
+server = dict(host = 'HOST', username = 'USERNAME', password = 'PASSWORD', port = '119')
 
 # functions
 def log():
@@ -205,10 +205,7 @@ def createNzb(payload):
 
 def headers():
 	# connect to nntp server
-	s = nntplib.NNTP(server['host'])
-
-	# auth
-	s.login(server['username'], server['password'])
+	s = nntplib.NNTP(server['host'], server['port'], server['username'], server['password'])
 
 	# iterate over groups
 	for group in collections['groups'].find():
