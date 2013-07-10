@@ -343,5 +343,4 @@ def headers():
 	s.quit()
 
 # bootstrap
-#headers()
-process('alt.binaries.moovee')
+headers()
