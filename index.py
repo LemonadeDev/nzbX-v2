@@ -19,7 +19,7 @@ collections = dict(articles = db['articles'], groups = db['groups'], releases = 
 
 # configuration
 config = dict(headers=['From', 'Subject', 'Date', 'Newsgroups', 'Lines'])
-server = dict(host = 'HOST', username = 'USERNAME', password = 'PASSWORD', port = '119')
+server = dict(host = 'HOST', username = 'USER', password = 'PASS', port = '119')
 
 # functions
 def log():
@@ -185,7 +185,7 @@ def createNzb(payload):
 			update = {}
 			update['processed'] = True
 			
-			collections['groups'].update({'mid': v['mid']}, {"$set": update}, upsert=False)
+			collections['articles'].update({'mid': v['mid']}, {"$set": update}, upsert=False)
 
 		s = s + '''</segments>
 </file>
