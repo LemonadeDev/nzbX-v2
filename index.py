@@ -141,7 +141,7 @@ def createRelease(payload):
 	createNzb(payload)
 
 	# insert release in to database
-	insertRelease(payload)
+	#insertRelease(payload)
 
 def getNfo(payload):
 	# this is where we'll download the nfo file
