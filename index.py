@@ -3,6 +3,7 @@ import datetime
 import nntplib
 import pprint
 import pymongo
+import random
 import re
 import string
 import sys
@@ -14,11 +15,11 @@ from pymongo import MongoClient
 # mongodb
 client = MongoClient()
 db = client['indexer']
-collections = dict(articles = db['articles'], groups = db['groups'])
+collections = dict(articles = db['articles'], groups = db['groups'], releases = db['releases'])
 
 # configuration
 config = dict(headers=['From', 'Subject', 'Date', 'Newsgroups', 'Lines'])
-server = dict(host = 'news.eu.supernews.com', username = 'USERNAME', password = 'PASSWORD')
+server = dict(host = 'HOST', username = 'USERNAME', password = 'PASSWORD')
 
 # functions
 def log():
@@ -137,11 +138,26 @@ def process(g):
 			return
 
 def createRelease(payload):
+	# generate filename
+	rand = str(random.randint(1, 10000))
+	valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+	payload['filename'] = ''.join(c for c in payload['release'] if c in valid_chars)
+	payload['filename'] = str(rand) + '_' + payload['filename']
+
+	release = dict()
+	release['filename'] = payload['filename']
+	release['group'] = payload['group']
+	release['name'] = payload['release']
+	release['poster'] = payload['poster']
+	release['when'] = payload['when']
+
+	# insert release in to database
+	collections['releases'].insert(release)
+
 	# create nzb file
 	createNzb(payload)
 
-	# insert release in to database
-	#insertRelease(payload)
+	return
 
 def getNfo(payload):
 	# this is where we'll download the nfo file
@@ -165,7 +181,12 @@ def createNzb(payload):
 			s = s + '''<segment bytes="''' + v['bytes'] + '''" number="''' + v['number'] + '''">''' + v['mid'] + '''</segment>
 '''
 
-		
+			# whilst we're here, mark this header as processed
+			update = {}
+			update['processed'] = True
+			
+			collections['groups'].update({'mid': v['mid']}, {"$set": update}, upsert=False)
+
 		s = s + '''</segments>
 </file>
 '''
@@ -175,12 +196,8 @@ def createNzb(payload):
 	b = f.read()
 	b = b.replace('replace', nzb)
 
-	# ensure resulting filename is valid
-	valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-	filename = ''.join(c for c in payload['release'] if c in valid_chars)
-
 	# create, save and close nzb file
-	fb = open('nzbs/' + filename + '.nzb', 'w')
+	fb = open('nzbs/' + payload['filename'] + '.nzb', 'w')
 	fb.write(b)
 	fb.close()
 
@@ -212,11 +229,11 @@ def headers():
 			resp, overviews = s.over((start, last))
 		else:
 			# ooh, new group! let's grab a quarter of a million articles.
-			diff = 250000
+			diff = 100000
 
 			print('(', group['group'], ')', 'Retrieving', diff, 'articles.')
 
-			resp, overviews = s.over((last - 250000, last))
+			resp, overviews = s.over((last - 100000, last))
 
 		if diff > 0:
 			# okay, we've got some new articles, let's insert them.
