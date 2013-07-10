@@ -15,14 +15,14 @@ from pymongo import MongoClient
 # mongodb
 client = MongoClient()
 db = client['indexer']
-collections = dict(articles = db['articles'], groups = db['groups'], releases = db['releases'])
+collections = dict(articles = db['articles'], groups = db['groups'], regex = db['regex'], releases = db['releases'])
 
 # configuration
-config = dict(headers=['From', 'Subject', 'Date', 'Newsgroups', 'Lines'])
+config = dict(delete=True, headers=['From', 'Subject', 'Date', 'Newsgroups', 'Lines'])
 server = dict(host = 'HOST', username = 'USER', password = 'PASS', port = '119')
 
 # functions
-def log():
+def log(err):
 	return
 
 def process(g):
@@ -34,108 +34,180 @@ def process(g):
 		# check that we've actually received articles from this group
 		if(int(group['last']) > 0):
 			# lookup unprocessed articles in group with regex wizardry
-			for article in collections['articles'].find({ "group": g, "processed": False, "subject": { '$regex': '.*?(?P<parts>\d{1,3}\/\d{1,3}).*?\"(?P<name>.*?)\.(nzb|sample|mkv|Avi|mp4|vol|ogm|par|rar|sfv|nfo|nzb|web|srt|ass|mpg|txt|zip|wmv|ssa|r\d{1,3}|7z|tar|mov|divx|m2ts|rmvb|iso|dmg|sub|idx|rm|ac3|t\d{1,2}|u\d{1,3})', '$options': 'i' } }):
-				matches = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?\"(?P<name>.*?)\.(nzb|sample|mkv|Avi|mp4|vol|ogm|par|rar|sfv|nfo|nzb|web|srt|ass|mpg|txt|zip|wmv|ssa|r\d{1,3}|7z|tar|mov|divx|m2ts|rmvb|iso|dmg|sub|idx|rm|ac3|t\d{1,2}|u\d{1,3})', article['subject'], re.IGNORECASE)
+			for regex in collections['regex'].find({ "group": g }):
+				for article in collections['articles'].find({ "group": g, "processed": False, "subject": { '$regex': regex['regex'], '$options': 'i' } }):
+					matches = re.findall(regex['regex'], article['subject'], re.IGNORECASE)
 
-				if matches[0]:
-					# confusing technobabble. essentially, we do everything in memory. screw i/o and database lag!
-					if matches[0][2]:
-						unique = matches[0][1] + '|' + article['from']
-						
-						if unique in memory:
-							parts = matches[0][0]
-							parts = parts.replace('-', '/')
-							parts = parts.replace('~', '/')
-							parts = parts.replace('of', '/')
+					if matches[0]:
+						# confusing technobabble. essentially, we do everything in memory. screw i/o and database lag!
+						try:
+							if matches[0][2]:
+								unique = matches[0][1] + '|' + article['from']
+								
+								if unique in memory:
+									parts = matches[0][0]
+									parts = parts.replace('-', '/')
+									parts = parts.replace('~', '/')
+									parts = parts.replace('of', '/')
 
-							arr = parts.partition('/')
+									arr = parts.partition('/')
 
-							if(arr[2]):
-								currentPart = int(arr[0])
-								partString = str(arr[0]) + '/' + str(int(arr[2]))
+									if(arr[2]):
+										currentPart = int(arr[0])
+										partString = str(arr[0]) + '/' + str(int(arr[2]))
 
-								m = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?', article['subject'], re.IGNORECASE)
+										m = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?', article['subject'], re.IGNORECASE)
 
-								if(m[1]):
-									p = m[1]
-									p = p.replace('-', '/')
-									p = p.replace('~', '/')
-									p = p.replace('of', '/')
+										if(m[1]):
+											p = m[1]
+											p = p.replace('-', '/')
+											p = p.replace('~', '/')
+											p = p.replace('of', '/')
 
-									pa = p.partition('/')
+											pa = p.partition('/')
 
-									segment = dict(bytes=article['bytes'], number=pa[0], mid=article['mid'])
+											segment = dict(bytes=article['bytes'], number=pa[0], mid=article['mid'])
 
-									if str(int(arr[0])) in memory[unique]['files']:
-										memory[unique]['files'][str(int(arr[0]))]['segments'].append(segment)
+											if str(int(arr[0])) in memory[unique]['files']:
+												memory[unique]['files'][str(int(arr[0]))]['segments'].append(segment)
+											else:
+												f = {}
+												f['name'] = article['subject']
+												f['segments'] = []
+												f['total'] = pa[2]
+
+												memory[unique]['files'][str(int(arr[0]))] = f
+												memory[unique]['files'][str(int(arr[0]))]['segments'].append(segment)
+
+								else:
+									parts = matches[0][0]
+									parts = parts.replace('-', '/')
+									parts = parts.replace('~', '/')
+									parts = parts.replace('of', '/')
+
+									arr = parts.partition('/')
+
+									if(arr[2]):
+										currentPart = int(arr[0])
+										partString = str(arr[0]) + '/' + str(int(arr[2]))
+
+										obj = {}
+										obj['files'] = {}
+										obj['group'] = article['group']
+										obj['info'] = dict(files=int(arr[2]))
+										obj['poster'] = article['from']
+										obj['release'] = matches[0][1]
+										obj['when'] = article['date']
+
+										m = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?', article['subject'], re.IGNORECASE)
+
+										if(m[1]):
+											p = m[1]
+											p = p.replace('-', '/')
+											p = p.replace('~', '/')
+											p = p.replace('of', '/')
+
+											pa = p.partition('/')
+
+											f = {}
+											f['name'] = article['subject']
+											f['segments'] = []
+											f['total'] = pa[2]
+
+											segment = dict(bytes=article['bytes'], number=pa[0], mid=article['mid'])
+											f['segments'].append(segment)
+
+											obj['files'][str(int(arr[0]))] = f
+
+											memory[unique] = obj
+						except:
+							m = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?', article['subject'], re.IGNORECASE)
+
+							try:
+								part = m[0]
+								segment = m[1]
+
+								part = part.replace('-', '/')
+								part = part.replace('~', '/')
+								part = part.replace('of', '/')
+
+								segment = segment.replace('-', '/')
+								segment = segment.replace('~', '/')
+								segment = segment.replace('of', '/')
+
+								partArr = part.partition('/')
+								segArr = segment.partition('/')
+
+								totalParts = partArr[2]
+								totalSegments = segArr[2]
+
+								currentPart = int(partArr[0])
+								currentSegment = int(segArr[0])
+
+								unique = matches[0][0] + '|' + article['from']
+								
+								if unique in memory:
+									segment = dict(bytes=article['bytes'], number=str(int(segArr[0])), mid=article['mid'])
+
+									if str(int(partArr[0])) in memory[unique]['files']:
+										memory[unique]['files'][str(int(partArr[0]))]['segments'].append(segment)
 									else:
 										f = {}
 										f['name'] = article['subject']
 										f['segments'] = []
-										f['total'] = pa[2]
+										f['total'] = segArr[2]
 
-										memory[unique]['files'][str(int(arr[0]))] = f
-										memory[unique]['files'][str(int(arr[0]))]['segments'].append(segment)
-
-						else:
-							parts = matches[0][0]
-							parts = parts.replace('-', '/')
-							parts = parts.replace('~', '/')
-							parts = parts.replace('of', '/')
-
-							arr = parts.partition('/')
-
-							if(arr[2]):
-								currentPart = int(arr[0])
-								partString = str(arr[0]) + '/' + str(int(arr[2]))
-
-								obj = {}
-								obj['files'] = {}
-								obj['group'] = article['group']
-								obj['info'] = dict(files=int(arr[2]))
-								obj['poster'] = article['from']
-								obj['release'] = matches[0][1]
-								obj['when'] = article['date']
-
-								m = re.findall('.*?(?P<parts>\d{1,3}\/\d{1,3}).*?', article['subject'], re.IGNORECASE)
-
-								if(m[1]):
-									p = m[1]
-									p = p.replace('-', '/')
-									p = p.replace('~', '/')
-									p = p.replace('of', '/')
-
-									pa = p.partition('/')
-
+										memory[unique]['files'][str(int(partArr[0]))] = f
+										memory[unique]['files'][str(int(partArr[0]))]['segments'].append(segment)
+								else:
 									f = {}
 									f['name'] = article['subject']
 									f['segments'] = []
-									f['total'] = pa[2]
+									f['total'] = segArr[2]
 
-									segment = dict(bytes=article['bytes'], number=pa[0], mid=article['mid'])
+									segment = dict(bytes=article['bytes'], number=str(int(segArr[0])), mid=article['mid'])
 									f['segments'].append(segment)
 
-									obj['files'][str(int(arr[0]))] = f
+									obj = {}
+									obj['files'] = {}
+									obj['group'] = article['group']
+									obj['info'] = dict(files=int(partArr[2]))
+									obj['poster'] = article['from']
+									obj['release'] = matches[0][0]
+									obj['when'] = article['date']
+
+
+									obj['files'][str(int(partArr[0]))] = f
 
 									memory[unique] = obj
+							except:
+								log(sys.exc_info()[0])
 
-			for key, value in memory.items():
-				complete = int(0)
-				total = int(len(value['files']))
+				for key, value in memory.items():
+					complete = int(0)
+					total = int(len(value['files']))
 
-				for a, b in value['files'].items():
-					if int(b['total']) == int(len(b['segments'])):
-						complete = complete + 1
+					for a, b in value['files'].items():
+						if int(b['total']) == int(len(b['segments'])):
+							complete = complete + 1
 
-				if complete == total:
-					# valid release
-					print('Creating release:', value['release'])
+					if complete == total:
+						# valid release
+						print('Creating release:', value['release'])
 
-					createRelease(value)
+						createRelease(value)
+
+						cleanup()
 
 		else:
 			print('(', group['group'], ')', 'No articles found for processing.')
 			return
+
+def cleanup():
+	if config['delete'] == True:
+		c = str(collections['articles'].find({'processed': True}).count())
+
+		collections['articles'].remove({'processed': True})
 
 def createRelease(payload):
 	# generate filename
@@ -181,11 +253,12 @@ def createNzb(payload):
 			s = s + '''<segment bytes="''' + v['bytes'] + '''" number="''' + v['number'] + '''">''' + v['mid'] + '''</segment>
 '''
 
-			# whilst we're here, mark this header as processed
-			update = {}
-			update['processed'] = True
+			# cleanup
 			
-			collections['articles'].update({'mid': v['mid']}, {"$set": update}, upsert=False)
+			if config['delete'] == True:
+				collections['articles'].remove({'mid': v['mid']})
+			else:
+				collections['articles'].update({'mid': v['mid']}, {"$set": update}, upsert=False)
 
 		s = s + '''</segments>
 </file>
@@ -208,7 +281,7 @@ def headers():
 	s = nntplib.NNTP(server['host'], server['port'], server['username'], server['password'])
 
 	# iterate over groups
-	for group in collections['groups'].find():
+	for group in collections['groups'].find({ "group": "alt.binaries.moovee" }):
 		print('Beginning update cycle for', group['group'])
 
 		# get group statistics
@@ -270,4 +343,5 @@ def headers():
 	s.quit()
 
 # bootstrap
-headers()
+#headers()
+process('alt.binaries.moovee')
