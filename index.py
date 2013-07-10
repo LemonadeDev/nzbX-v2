@@ -233,12 +233,31 @@ def createRelease(payload):
 	release['name'] = payload['release']
 	release['poster'] = payload['poster']
 	release['when'] = payload['when']
+	release['contents'] = []
+
+	for key, value in payload['files'].items():
+		name = value['name']
+		name = name.replace('"', '&quot;')
+
+		pos = name.find('.nfo')
+
+		if(pos > 0):
+			mid = value['segments'][0]['mid']
+			mid = mid.replace('<', '')
+			mid = mid.replace('>', '')
+
+			release['nfo'] = mid
+
+			print(mid)
+
+		release['contents'].append(name)
 
 	# create nzb file
 	guid = createNzb(payload)
 
 	# set unique identifier
-	release['guid'] = guid
+	if guid != False:
+		release['guid'] = guid
 
 	# insert release in to database
 	collections['releases'].insert(release)
@@ -270,6 +289,8 @@ def createNzb(payload):
 			mid = v['mid']
 			mid = mid.replace('<', '')
 			mid = mid.replace('>', '')
+
+			guid = False
 
 			if int(key) == 1:
 				if int(v['number']) == 1:
