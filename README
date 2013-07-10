@@ -1,0 +1,1 @@
+This is a horribly put together early proof of concept of the nzbX V2 public indexing engine that is being developed as a result of the nzbX closure. It requires Python 3.3 and MongoDB installed. Python modules required include PyMongo and uh... well, that's it.
