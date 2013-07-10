@@ -28,7 +28,7 @@ def log(err):
 def getCategory(release):
 	if release['group'] == 'alt.binaries.teevee':
 		return 'TV'
-	else if release['group'] == 'alt.binaries.moovee':
+	elif release['group'] == 'alt.binaries.moovee':
 		return 'Movies'
 	else:
 		return 'N/A'
