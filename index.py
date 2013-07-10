@@ -50,7 +50,7 @@ def process(g):
 						# confusing technobabble. essentially, we do everything in memory. screw i/o and database lag!
 						try:
 							if matches[0][2]:
-								unique = matches[0][1] + '|' + article['from']
+								unique = matches[0][1] + '|' + article['from'] + '|' + article['group']
 								
 								if unique in memory:
 									parts = matches[0][0]
@@ -153,7 +153,7 @@ def process(g):
 								currentPart = int(partArr[0])
 								currentSegment = int(segArr[0])
 
-								unique = matches[0][0] + '|' + article['from']
+								unique = matches[0][0] + '|' + article['from'] + '|' + article['group']
 								
 								if unique in memory:
 									segment = dict(bytes=article['bytes'], number=str(int(segArr[0])), mid=article['mid'])
@@ -191,23 +191,31 @@ def process(g):
 
 									memory[unique] = obj
 							except:
-								log(sys.exc_info()[0])
+								log()
+
+				created = []
 
 				for key, value in memory.items():
-					complete = int(0)
-					total = int(len(value['files']))
+					try:
+						iPos = created.index(value['unique'])
 
-					for a, b in value['files'].items():
-						if int(b['total']) == int(len(b['segments'])):
-							complete = complete + 1
+						log(iPos)
+					except:
+						complete = int(0)
+						total = int(len(value['files']))
 
-					if complete == total:
-						# valid release
-						print('Creating release:', value['release'], '(', value['unique'], ')')
+						for a, b in value['files'].items():
+							if int(b['total']) == int(len(b['segments'])):
+								complete = complete + 1
 
-						createRelease(value)
+						if complete == total:
+							# valid release
+							print('Creating release:', value['release'], '(', value['unique'], ')')
 
-						cleanup()
+							createRelease(value)
+							created.append(value['unique'])
+
+							cleanup()
 
 		else:
 			print('(', group['group'], ')', 'No articles found for processing.')
@@ -234,6 +242,8 @@ def createRelease(payload):
 	release['poster'] = payload['poster']
 	release['when'] = payload['when']
 	release['contents'] = []
+	release['nfoText'] = False
+	release['nfo'] = False
 
 	for key, value in payload['files'].items():
 		name = value['name']
@@ -247,8 +257,6 @@ def createRelease(payload):
 			mid = mid.replace('>', '')
 
 			release['nfo'] = mid
-
-			print(mid)
 
 		release['contents'].append(name)
 
