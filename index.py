@@ -25,6 +25,14 @@ server = dict(host = 'HOST', username = 'USER', password = 'PASS', port = '119')
 def log(err):
 	return
 
+def getCategory(release):
+	if release['group'] == 'alt.binaries.teevee':
+		return 'TV'
+	else if release['group'] == 'alt.binaries.moovee':
+		return 'Movies'
+	else:
+		return 'N/A'
+
 def process(g):
 	print('(', g, ')', 'Processing headers.')
 
@@ -92,6 +100,7 @@ def process(g):
 										partString = str(arr[0]) + '/' + str(int(arr[2]))
 
 										obj = {}
+										obj['unique'] = unique
 										obj['files'] = {}
 										obj['group'] = article['group']
 										obj['info'] = dict(files=int(arr[2]))
@@ -169,6 +178,7 @@ def process(g):
 									f['segments'].append(segment)
 
 									obj = {}
+									obj['unique'] = unique
 									obj['files'] = {}
 									obj['group'] = article['group']
 									obj['info'] = dict(files=int(partArr[2]))
@@ -193,7 +203,7 @@ def process(g):
 
 					if complete == total:
 						# valid release
-						print('Creating release:', value['release'])
+						print('Creating release:', value['release'], '(', value['unique'], ')')
 
 						createRelease(value)
 
@@ -219,15 +229,19 @@ def createRelease(payload):
 	release = dict()
 	release['filename'] = payload['filename']
 	release['group'] = payload['group']
+	release['category'] = getCategory(payload)
 	release['name'] = payload['release']
 	release['poster'] = payload['poster']
 	release['when'] = payload['when']
 
+	# create nzb file
+	guid = createNzb(payload)
+
+	# set unique identifier
+	release['guid'] = guid
+
 	# insert release in to database
 	collections['releases'].insert(release)
-
-	# create nzb file
-	createNzb(payload)
 
 	return
 
@@ -241,8 +255,11 @@ def createNzb(payload):
 
 	nzb = ''
 
-	for key, value in payload['files'].items():
-		s = '''<file poster=''' + payload['poster'] + ''' date="1353891054" subject="''' + value['name'] + '''">
+	for key, value in payload['files'].items():	
+		name = value['name']
+		name = name.replace('"', '&quot;')
+
+		s = '''<file poster=''' + payload['poster'] + ''' date="1353891054" subject="''' + name + '''">
 <groups>
 <group>''' + payload['group'] + '''</group>
 </groups>
@@ -250,7 +267,14 @@ def createNzb(payload):
 '''
 
 		for v in value['segments']:
-			s = s + '''<segment bytes="''' + v['bytes'] + '''" number="''' + v['number'] + '''">''' + v['mid'] + '''</segment>
+			mid = v['mid']
+			mid = mid.replace('<', '')
+			mid = mid.replace('>', '')
+
+			if int(key) == 1:
+				if int(v['number']) == 1:
+					guid = mid
+			s = s + '''<segment bytes="''' + v['bytes'] + '''" number="''' + v['number'] + '''">''' + mid + '''</segment>
 '''
 
 			# cleanup
@@ -274,14 +298,14 @@ def createNzb(payload):
 	fb.write(b)
 	fb.close()
 
-	return
+	return guid
 
 def headers():
 	# connect to nntp server
 	s = nntplib.NNTP(server['host'], server['port'], server['username'], server['password'])
 
 	# iterate over groups
-	for group in collections['groups'].find({ "group": "alt.binaries.moovee" }):
+	for group in collections['groups'].find():
 		print('Beginning update cycle for', group['group'])
 
 		# get group statistics
