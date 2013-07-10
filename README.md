@@ -10,6 +10,8 @@ var g = { group: 'alt.binaries.teevee', first: 0, last: 0 }
 
 db.groups.insert(g)
 
+db.articles.ensureIndex({ mid: 1, processed: 1})
+
 -----
 
 Change the username and password of the NNTP host in index.py
