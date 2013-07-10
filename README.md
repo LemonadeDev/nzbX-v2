@@ -5,8 +5,12 @@ This is a horribly put together early proof of concept of the nzbX V2 public ind
 After installing the pre-requirements, run the following commands in a Mongo shell.
 
 use indexer
+
 var g = { group: 'alt.binaries.teevee', first: 0, last: 0 }
+
 db.groups.insert(g)
+
+-----
 
 Change the username and password of the NNTP host in index.py
 
